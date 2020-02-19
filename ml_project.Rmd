@@ -1,0 +1,144 @@
+---
+title: "Prediction Assignment"
+author: "Francesco Mio"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# Prediction Assignment Course Project
+#
+## Executive Summary
+#
+#### One thing that people of the quantified self movement regularly 
+#### do is to quantify how much of a particular activity they do, but 
+#### they rarely quantify how well they do it. In this project, the 
+#### goal will be to use data from accelerometers on the belt, forearm, 
+#### arm, and dumbell of 6 participants. They were asked to perform 
+#### barbell lifts correctly and incorrectly in 5 different ways. The 
+#### goal of the project is to predict the manner in which they 
+#### did the exercise. 
+#
+## Load libraries and data
+```{r box1_libs_data}
+library(caret)
+library(corrplot)
+library(randomForest)
+library(rattle)
+library(rpart)
+library(rpart.plot)
+
+train <- read.csv("pml-training.csv", na.strings=c("#DIV/0!", "NA", ""))  
+test <- read.csv("pml-testing.csv", na.strings=c("#DIV/0!", "NA", ""))
+
+dim(train)
+dim(test)
+```
+#
+## Data cleaning
+
+#### Data cleaning, by removing all columns that contain 
+#### NAs or empty values. Also, I remove the first columns
+#### that contain data, that won't help the predoction (see data 
+#### summary in appendix 1 - i.e. timestamp data).
+```{r box2_data_cleaning}
+train_clean <- train[,colSums(is.na(train))==0] 
+train_clean <- train_clean[,-c(1:7)]
+
+test_clean <- test[,colSums(is.na(test))==0]  
+test_clean <- test_clean[,-c(1:7)]
+
+dim(train_clean)
+dim(test_clean)
+
+nearZeroVariables <- nearZeroVar(train_clean)
+nearZeroVariables
+```
+#
+## Create validation set
+```{r box3_val}
+train_partition <- createDataPartition(train_clean$classe, p=0.8, list=FALSE)
+train_final <- train_clean[train_partition,]
+valid_final <- train_clean[-train_partition,]
+
+test_final <- test_clean
+
+dim(train_final)
+dim(valid_final)
+```
+#
+## Correlation Matrix
+```{r box4_cv}
+exerCorrmatrix<-cor(train_final[sapply(train_final, is.numeric)])  
+corrplot(exerCorrmatrix,order="FPC", tl.cex=0.2, tl.col="black") 
+```
+#
+## Cross Validation
+```{r box5_cross_validation}
+cross_validation <- trainControl(method='cv', number = 3)
+```
+#
+## Decision Tree
+```{r box6_1_decision_tree}
+set.seed(111)
+decisionTree_model <- train(classe~., data=train_final, method="rpart", trControl=cross_validation)
+fancyRpartPlot(decisionTree_model$finalModel)
+```
+#
+## Decision Tree Model Performance
+```{r box6_2_model_performance}
+decisionTree_prediction <- predict(decisionTree_model,newdata=valid_final)
+decisionTree_cm <- confusionMatrix(valid_final$classe,decisionTree_prediction)
+decisionTree_cm
+```
+#
+## Random Forest
+```{r box7_1_random_tree}
+set.seed(112)
+randomForest_model <- train(classe~., data=train_final, method="rf", trControl=cross_validation, verbose=FALSE)
+plot(randomForest_model)
+```
+#
+## Random Forest Model Performance
+```{r box7_2_random_tree_model_performance}
+randomForest_prediction <- predict(randomForest_model,newdata=valid_final)
+randomForest_cm <- confusionMatrix(valid_final$classe,randomForest_prediction)
+randomForest_cm
+```
+#
+## Generalized Boosted Regression
+```{r box8_1_gbm}
+set.seed(113)
+gbm_model <- train(classe~., data=train_final, method="gbm", trControl=cross_validation, verbose=FALSE)
+plot(gbm_model)
+```
+#
+## Generalized Boosted Regression Model Performance
+```{r box8_2_gbm_performance}
+gbm_prediction <- predict(gbm_model,newdata=valid_final)
+gbm_cm <- confusionMatrix(valid_final$classe,gbm_prediction)
+gbm_cm
+```
+#
+## Choosing the best Model 
+#
+#### Comparing all three confusion matrices
+#### to find the most accurate one.
+#### The Random Forest has the highest "Accuracy"
+#### value in the confusion matrix summary.
+#### We will use the radomForest_model with
+#### the test_final data set.
+```{r box9_test_model}
+prediction_test <- predict(randomForest_model,newdata=test_final)
+prediction_test
+```
+#
+# Appendix 
+#
+### Appendix 1: Boxplot
+```{r appendix_1_data_exploration}
+summary(train)[,1:7]
+```
